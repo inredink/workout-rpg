@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'react';
-import { Button, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { createWorkout, initializeDatabase } from '../../src/services/workoutService';
-import { calculateWorkoutXp } from '../../src/services/xp';
+import { Button, ScrollView, StyleSheet, Text, TextInput, View, TouchableOpacity } from 'react-native';
+import { createWorkout, initializeDatabase, getPlayer, updatePlayerUnits } from '../../src/services/workoutService';
+import { emit } from '../../src/services/events';
 
 export default function LogWorkoutScreen() {
   const [exerciseName, setExerciseName] = useState('Bench Press');
   const [sets, setSets] = useState([{ reps: '8', weight: '135' }]);
   const [status, setStatus] = useState('');
+  const [units, setUnits] = useState<'lb' | 'kg'>('lb');
 
   useEffect(() => {
     initializeDatabase();
+    const player = getPlayer();
+    if (player && player.units) setUnits(player.units === 'kg' ? 'kg' : 'lb');
   }, []);
 
   const updateSet = (index: number, field: 'reps' | 'weight', value: string) => {
@@ -19,12 +22,18 @@ export default function LogWorkoutScreen() {
   const addSet = () => setSets((current) => [...current, { reps: '10', weight: '0' }]);
   const removeSet = (index: number) => setSets((current) => current.filter((_, i) => i !== index));
 
+  const changeUnits = (u: 'lb' | 'kg') => {
+    setUnits(u);
+    updatePlayerUnits(u);
+    emit('playerUpdated');
+  };
+
   const saveWorkout = () => {
     const cleanExerciseName = exerciseName.trim();
     const parsedSets = sets
       .map((set) => ({
-        reps: Number(set.reps || 0),
-        weight: Number(set.weight || 0),
+        reps: Math.max(0, Math.floor(Number(set.reps || 0))),
+        weight: Math.max(0, Number(set.weight || 0)),
       }))
       .filter((set) => set.reps > 0);
     if (!cleanExerciseName || parsedSets.length === 0) {
@@ -38,22 +47,39 @@ export default function LogWorkoutScreen() {
       sets: parsedSets,
     };
 
-    const workoutId = createWorkout({
+    const { workoutId, xpAwarded } = createWorkout({
       notes: 'Session logged from starter workflow',
-      units: 'lb',
+      units,
       exercises: [exercise],
     });
 
-    const xp = calculateWorkoutXp(parsedSets.length, parsedSets.reduce((sum, set) => sum + set.reps, 0), parsedSets.reduce((sum, set) => sum + set.weight, 0));
+    // Notify other parts of the app the player was updated
+    emit('playerUpdated');
 
-    setStatus(`Workout saved. ${parsedSets.length} set(s) recorded. ${xp} XP awarded.`);
+    setStatus(`Workout saved. ${parsedSets.length} set(s) recorded. ${xpAwarded} XP awarded.`);
     setExerciseName('');
-    setSets([{ reps: '8', weight: '135' }]);
+    setSets([{ reps: '8', weight: units === 'kg' ? '60' : '135' }]);
   };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Log Workout</Text>
+
+      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+        <TouchableOpacity
+          onPress={() => changeUnits('lb')}
+          style={[styles.unitButton, units === 'lb' ? styles.unitButtonActive : null]}
+        >
+          <Text style={units === 'lb' ? styles.unitTextActive : styles.unitText}>lb</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => changeUnits('kg')}
+          style={[styles.unitButton, units === 'kg' ? styles.unitButtonActive : null]}
+        >
+          <Text style={units === 'kg' ? styles.unitTextActive : styles.unitText}>kg</Text>
+        </TouchableOpacity>
+      </View>
+
       <TextInput
         style={styles.input}
         value={exerciseName}
@@ -133,4 +159,15 @@ const styles = StyleSheet.create({
   },
   buttonRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   status: { color: '#86efac', fontSize: 14, marginTop: 8 },
+  unitButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#0f172a',
+    borderColor: '#334155',
+    borderWidth: 1,
+  },
+  unitButtonActive: { backgroundColor: '#1f2937', borderColor: '#60a5fa' },
+  unitText: { color: '#9ca3af' },
+  unitTextActive: { color: '#dbeafe', fontWeight: '700' },
 });
