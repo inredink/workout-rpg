@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { getOrCreatePlayer, getPlayerFaction } from '../../src/services/workoutService';
+import { getPlayer, getOrCreatePlayer } from '../../src/services/workoutService';
+import { on, off } from '../../src/services/events';
 import { Faction } from '../../src/types';
 import { getFactionCatalog } from '../../src/services/factionService';
 
@@ -8,12 +9,19 @@ export default function CharacterScreen() {
   const [player, setPlayer] = useState<any>(null);
   const [faction, setFaction] = useState<Faction | null>(null);
 
-  useEffect(() => {
-    const data = getOrCreatePlayer();
+  const refreshPlayer = () => {
+    const data = getPlayer() || getOrCreatePlayer();
     setPlayer(data);
     const catalog = getFactionCatalog();
     const selected = catalog.find((item) => item.id === data.factionId) ?? catalog[0];
     setFaction(selected ?? null);
+  };
+
+  useEffect(() => {
+    refreshPlayer();
+    const handlePlayerUpdate = () => refreshPlayer();
+    on('playerUpdated', handlePlayerUpdate);
+    return () => off('playerUpdated', handlePlayerUpdate);
   }, []);
 
   if (!player || !faction) {
@@ -21,6 +29,7 @@ export default function CharacterScreen() {
   }
 
   const progress = Math.min((player.xp / Math.max(player.level * 100, 1)) * 100, 100);
+  const nextLevelTarget = player.level * 100;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -33,6 +42,7 @@ export default function CharacterScreen() {
             <Text style={styles.title}>{player.name}</Text>
             <Text style={styles.subtitle}>{faction.name}</Text>
             <Text style={styles.rank}>Rank: {faction.rankLadder[0]}</Text>
+            <Text style={styles.units}>Units: {player.units || 'lb'}</Text>
           </View>
         </View>
 
@@ -52,7 +62,7 @@ export default function CharacterScreen() {
           <View style={styles.progressBar}>
             <View style={[styles.progressFill, { width: `${progress}%` }]} />
           </View>
-          <Text style={styles.progressText}>{Math.round(progress)}% / {player.level * 100} XP</Text>
+          <Text style={styles.progressText}>{Math.round(progress)}% / {nextLevelTarget} XP</Text>
         </View>
 
         <View style={styles.panel}>
@@ -92,6 +102,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 26, fontWeight: '700', color: '#f8fafc' },
   subtitle: { fontSize: 14, color: '#90cdf4', marginTop: 4 },
   rank: { fontSize: 14, color: '#cbd5e1', marginTop: 6 },
+  units: { fontSize: 12, color: '#cbd5e1', marginTop: 4 },
   statsGrid: { flexDirection: 'row', gap: 12 },
   statCard: {
     flex: 1,
