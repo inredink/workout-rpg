@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "Workout RPG",
+    "slug": "workout-rpg",
+    "scheme": "workout-rpg",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
